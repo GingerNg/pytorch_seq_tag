@@ -1,0 +1,13 @@
+{
+    "root": {
+        "data": {
+            "id": "c6udoojr62g0",
+            "created": 1604482804053,
+            "text": "sequence_labeling"
+        },
+        "children": []
+    },
+    "template": "default",
+    "theme": "fresh-blue",
+    "version": "1.4.43"
+}
