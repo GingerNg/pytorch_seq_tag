@@ -8,7 +8,7 @@ def write_json(filename, dataset):
         ujson.dump(dataset, f)
 
 
-def read_json(input_file, dataset):
+def read_json(input_file):
     with codecs.open(input_file, 'r', encoding='utf-8') as f:
         data = ujson.load(f)
         return data

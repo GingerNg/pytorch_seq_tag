@@ -2,7 +2,7 @@ import torch
 import os
 
 # set cuda
-gpu = 0
+gpu = -1
 use_cuda = gpu >= 0 and torch.cuda.is_available()
 if use_cuda:
     torch.cuda.set_device(gpu)

@@ -4,7 +4,7 @@ import logging
 from transformers import BertModel
 from utils.model_utils import use_cuda, device
 import numpy as np
-from cfg import bert_path
+# from cfg import bert_path
 import torch.nn.functional as F
 
 # build word encoder
@@ -12,14 +12,26 @@ dropout = 0.15
 
 
 class BertSoftmaxModel(nn.Module):
-    def __init__(self):
+    def __init__(self, bert_path, label_encoder):
         super(BertSoftmaxModel, self).__init__()
+        self.all_parameters = {}
+        parameters = []
         self.dropout = nn.Dropout(dropout)
 
         self.tokenizer = WhitespaceTokenizer(bert_path)
         self.bert = BertModel.from_pretrained(bert_path)
+        bert_parameters = self.get_bert_parameters()
 
-        self.dense = nn.Linear(768, 84)
+        self.dense = nn.Linear(768, label_encoder.label_size)
+        parameters.extend(
+            list(filter(lambda p: p.requires_grad, self.dense.parameters())))
+
+        if use_cuda:
+            self.to(device)
+
+        if len(parameters) > 0:
+            self.all_parameters["basic_parameters"] = parameters
+        self.all_parameters["bert_parameters"] = bert_parameters
         self.pooled = False
         logging.info('Build Bert encoder with pooled {}.'.format(self.pooled))
 
@@ -37,16 +49,20 @@ class BertSoftmaxModel(nn.Module):
         ]
         return optimizer_parameters
 
-    def forward(self, input_ids, token_type_ids):
+    def forward(self, batch_inputs):
         # input_ids: sen_num x bert_len
         # token_type_ids: sen_num  x bert_len
+        input_ids, token_type_ids = batch_inputs
 
         # sen_num x bert_len x 256, sen_num x 256
         sequence_output, pooled_output = self.bert(
             input_ids=input_ids, token_type_ids=token_type_ids)
+        # print(sequence_output.shape)
+        out = self.dense(sequence_output)
 
-        score = F.softmax(sequence_output, dim=-1)  # dim=-1： 对最后一维进行softmax
-
+        score = F.softmax(out, dim=-1)  # dim=-1： 对最后一维进行softmax
+        # print("score:{}".format(score.shape))
+        score = score.view(score.shape[0] * score.shape[1], score.shape[2])
         return score
         # if self.pooled:
         #     reps = pooled_output

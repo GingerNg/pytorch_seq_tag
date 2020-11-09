@@ -1,3 +1,8 @@
 *.pyc
 data/dataset/demo/pd_dev.json
 data/dataset/demo/pd_train.json
+__pycache__
+*.pth
+data/raw_data/demo/2014_corpus*.txt
+data/raw_data/china_people/*
+data/dataset/china_people/*

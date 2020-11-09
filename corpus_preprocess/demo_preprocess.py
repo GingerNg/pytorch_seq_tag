@@ -70,10 +70,13 @@ class DatasetProcesser(object):
 
     def batch2tensor(self, batch_data):
         batch_size = len(batch_data)
-        max_sent_len = 64
+        max_sent_len = 200
         doc_labels = []
         for doc_data in batch_data:
-            doc_labels.append(doc_data[0])
+            if len(doc_data[0]) >= max_sent_len:
+                doc_labels.extend(doc_data[0][0:max_sent_len])
+            else:
+                doc_labels.extend(doc_data[0] + [0]*(max_sent_len-len(doc_data[0])))
         batch_labels = torch.LongTensor(doc_labels)
 
         token_type_ids = [0] * max_sent_len
@@ -81,22 +84,22 @@ class DatasetProcesser(object):
             (batch_size, max_sent_len), dtype=torch.int64)
         batch_inputs2 = torch.zeros(
             (batch_size, max_sent_len), dtype=torch.int64)
-        batch_labels = torch.zeros(
-            (batch_size, max_sent_len), dtype=torch.int64)
+        # batch_labels = torch.zeros(
+        #     (batch_size, max_sent_len), dtype=torch.int64)
 
         for b in range(batch_size):
             token_ids = batch_data[b][2]
-            ids = batch_data[b][0]
-            for word_idx in range(len(token_ids)):
+            # ids = batch_data[b][0]
+            for word_idx in range(min(max_sent_len, len(token_ids))):
                 batch_inputs1[b, word_idx] = token_ids[word_idx]
                 batch_inputs2[b, word_idx] = token_type_ids[word_idx]
-                batch_labels[b, word_idx] = ids[word_idx]
+                # batch_labels[b, word_idx] = ids[word_idx]
 
         if use_cuda:
             batch_inputs1 = batch_inputs1.to(device)
             batch_inputs2 = batch_inputs2.to(device)
             batch_labels = batch_labels.to(device)
-
+        # print("batch_labels_shape:{}".format(batch_labels.shape))
         return (batch_inputs1, batch_inputs2), batch_labels
 
 
@@ -138,13 +141,8 @@ NUM = "<NUM>"
 END = "</S>"
 SPACE = "_SPACE"
 
-raw_path = os.path.join(cfg.proj_path, "data/raw_data/demo/demo.txt")
-train_path = os.path.join(cfg.proj_path, "data/raw_data/demo/demo_train.txt")
-dev_path = os.path.join(cfg.proj_path, "data/raw_data/demo/demo_dev.txt")
-test_path = os.path.join(cfg.proj_path, "data/raw_data/demo/demo_test.txt")
 
-
-def split_dataset():
+def split_dataset(raw_path, train_path, dev_path, test_path):
     # file = '/data/dh/neural_sequence_labeling-master/data/raw/LREC/2014_corpus.txt'
     # file = peopledaily_corpus.raw_path
     with open(raw_path, 'r', encoding='utf-8') as fp:
@@ -367,7 +365,7 @@ def build_dataset(data_files, word_dict, char_dict, punct_dict, max_sequence_len
     return dataset
 
 
-def process_data(config):
+def process_data(config, train_path, dev_path):
     train_file = train_path
     dev_file = dev_path
     # train_file = os.path.join(config["raw_path"], "2014_train.txt")

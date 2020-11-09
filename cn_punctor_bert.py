@@ -5,12 +5,18 @@ from models.optimizers import Optimizer
 import torch.nn as nn
 import torch
 import numpy as np
-from utils import file_utils
+from utils import file_utils, model_utils
+from evaluation_index import scores
+import os
 
 
 config = cfg.config
-config.define("raw_path", "data/dataset/demo", "path to raw dataset")
-config.define("save_path", "data/dataset/demo", "path to save dataset")
+# dataset_name = "demo"
+dataset_name = "china_people"
+model_name = "bert_nn"
+
+config.define("raw_path", "data/raw_data/%s" % dataset_name, "path to raw dataset")
+config.define("save_path", "data/dataset/%s" % dataset_name, "path to save dataset")
 config.define("glove_name", "840B", "glove embedding name")
 # glove embedding path
 # glove_path = '/data/dh/glove/glove.840B.300d.txt'
@@ -18,15 +24,15 @@ glove_path = './data/glove/glove.840B.300d.txt'
 #glove_path = os.path.join(os.path.expanduser(''), "utilities", "embeddings", "glove.{}.{}d.txt")
 config.define("glove_path", glove_path, "glove embedding path")
 config.define("max_vocab_size", 50000, "maximal vocabulary size")
-config.define("max_sequence_len", 200, "maximal sequence length allowed")
+config.define("max_sequence_len", 200, "maximal sequence length allowed")  # 最大序列长度
 config.define("min_word_count", 1, "minimal word count in word vocabulary")
 config.define("min_char_count", 10, "minimal character count in char vocabulary")
 
 # dataset for train, validate and test
-config.define("vocab", "data/dataset/demo/pd_vocab.json", "path to the word and tag vocabularies")
+config.define("vocab", "data/dataset/%s/pd_vocab.json" % dataset_name, "path to the word and tag vocabularies")
 
-config.define("train_set", "data/dataset/demo/pd_train.json", "path to the training datasets")
-config.define("dev_set", "data/dataset/demo/pd_dev.json", "path to the development datasets")
+config.define("train_set", "data/dataset/%s/pd_train.json" % dataset_name, "path to the training datasets")
+config.define("dev_set", "data/dataset/%s/pd_dev.json" % dataset_name, "path to the development datasets")
 
 config.define("dev_text", "data/raw/LREC/2014_dev.txt", "path to the development text")
 
@@ -41,12 +47,18 @@ config.define("use_pretrained", False, "use pretrained word embedding")
 config.define("tuning_emb", False, "tune pretrained word embedding while training")
 config.define("emb_dim", 300, "embedding dimension for encoder and decoder input words/tokens")
 
-config.define("train_batch_size", 128, "train_batch_size")
+config.define("train_batch_size", 64, "train_batch_size")
+config.define("test_batch_size", 64, "test_batch_size")
 config.define("epochs", 100, "epochs")
 config.define("clip", 5.0, "clip")
 
 label_encoder = demo_preprocess.LabelEncoer()
 dataset_processer = demo_preprocess.DatasetProcesser(cfg.bert_path)
+
+raw_path = os.path.join(cfg.proj_path, config["raw_path"], "2014_corpus.txt")
+train_path = os.path.join(cfg.proj_path, config["raw_path"], "2014_corpus_train.txt")
+dev_path = os.path.join(cfg.proj_path, config["raw_path"], "2014_corpus_dev.txt")
+test_path = os.path.join(cfg.proj_path, config["raw_path"], "2014_corpus_test.txt")
 
 def run(mtd="fold_split"):
     def _eval(data):
@@ -55,32 +67,33 @@ def run(mtd="fold_split"):
         y_pred = []
         y_true = []
         with torch.no_grad():
-            for batch_data in data_iter(data, test_batch_size, shuffle=False):
+            for batch_data in dataset_processer.data_iter(data, config['test_batch_size'], shuffle=False):
                 torch.cuda.empty_cache()
-                batch_inputs, batch_labels = batch2tensor(batch_data)
+                batch_inputs, batch_labels = dataset_processer.batch2tensor(batch_data)
                 batch_outputs = model(batch_inputs)
                 y_pred.extend(torch.max(batch_outputs, dim=1)
                               [1].cpu().numpy().tolist())
                 y_true.extend(batch_labels.cpu().numpy().tolist())
 
-            score, dev_f1 = get_score(y_true, y_pred)
+            score, dev_f1 = scores.get_score(y_true, y_pred)
         return score, dev_f1
     step = 0
     if mtd == "fold_split":
-        demo_preprocess.split_dataset()
+        demo_preprocess.split_dataset(raw_path, train_path, dev_path, test_path)
     elif mtd == "process_data":
-        demo_preprocess.process_data(config)
+        demo_preprocess.process_data(config, train_path, dev_path)
     elif mtd == "train":
-        train_data = file_utils.read_json(config["train_set"])
-        dev_data = file_utils.read_json(config["dev_set"])
+        Train_data = file_utils.read_json(config["train_set"])
+        Dev_data = file_utils.read_json(config["dev_set"])
         # 生成模型可处理的格式
-        # train_data = get_examples(label_encoder)
-        # dev_data = get_examples(label_encoder)
+        train_data = dataset_processer.get_examples(Train_data, label_encoder)
+        dev_data = dataset_processer.get_examples(Dev_data, label_encoder)
+        del Train_data, Dev_data
         # 一个epoch的batch个数
         batch_num = int(np.ceil(len(train_data) / float(config["train_batch_size"])))
 
-        model = BertSoftmaxModel(label_encoder)
-        optimizer = Optimizer(model.all_parameters, None)  # 优化器
+        model = BertSoftmaxModel(cfg.bert_path, label_encoder)
+        optimizer = Optimizer(model.all_parameters, steps=batch_num * config["epochs"])  # 优化器
 
         #　loss
         criterion = nn.CrossEntropyLoss()  # obj
@@ -89,7 +102,7 @@ def run(mtd="fold_split"):
         EarlyStopEpochs = 3  # 当多个epoch，dev的指标都没有提升，则早停
         # train
         print("start train")
-        for epoch in range(1, config["epoch"] + 1):
+        for epoch in range(1, config["epochs"] + 1):
             optimizer.zero_grad()
             model.train()  # 启用 BatchNormalization 和 Dropout
             overall_losses = 0
@@ -97,9 +110,9 @@ def run(mtd="fold_split"):
             # batch_idx = 1
             y_pred = []
             y_true = []
-            for batch_data in data_iter(train_data, config["train_batch_size"], shuffle=True):
+            for batch_data in dataset_processer.data_iter(train_data, config["train_batch_size"], shuffle=True):
                 torch.cuda.empty_cache()
-                batch_inputs, batch_labels = batch2tensor(batch_data)
+                batch_inputs, batch_labels = dataset_processer.batch2tensor(batch_data)
                 batch_outputs = model(batch_inputs)
                 loss = criterion(batch_outputs, batch_labels)
                 loss.backward()
@@ -122,8 +135,8 @@ def run(mtd="fold_split"):
                 # print(step)
             print(epoch)
             overall_losses /= batch_num
-            overall_losses = reformat(overall_losses, 4)
-            score, train_f1 = get_score(y_true, y_pred)
+            overall_losses = scores.reformat(overall_losses, 4)
+            score, train_f1 = scores.get_score(y_true, y_pred)
             print("score:{}, train_f1:{}".format(train_f1, score))
             # if set(y_true) == set(y_pred):
             #     print("report")
@@ -134,22 +147,22 @@ def run(mtd="fold_split"):
             # eval
             _, dev_f1 = _eval(data=dev_data)
 
-            if best_dev_f1 <= dev_f1:
+            if best_dev_f1 < dev_f1:
                 best_dev_f1 = dev_f1
                 early_stop = 0
                 best_train_f1 = train_f1
                 save_path = model_utils.save_checkpoint(
-                    model, epoch, save_folder=os.path.join(proj_path, "data/textcnn_industry"))
+                    model, epoch, save_folder=os.path.join(cfg.proj_path, "data/bert_nn"))
                 print("save_path:{}".format(save_path))
                 # torch.save(model.state_dict(), save_model)
             else:
                 early_stop += 1
                 if early_stop == EarlyStopEpochs:  # 达到早停次数，则停止训练
                     break
-
+            print("early_stop:{}".format(early_stop))
             print("score:{}, dev_f1:{}, best_train_f1:{}, best_dev_f1:{}".format(
                 dev_f1, score, best_train_f1, best_dev_f1))
 
 
 if __name__ == "__main__":
-    run(mtd="process_data")
+    run(mtd="train")
