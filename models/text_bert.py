@@ -22,7 +22,7 @@ class BertSoftmaxModel(nn.Module):
         self.bert = BertModel.from_pretrained(bert_path)
         bert_parameters = self.get_bert_parameters()
 
-        self.dense = nn.Linear(768, label_encoder.label_size)
+        self.dense = nn.Linear(768, label_encoder.label_size, bias=True)
         parameters.extend(
             list(filter(lambda p: p.requires_grad, self.dense.parameters())))
 
@@ -50,35 +50,22 @@ class BertSoftmaxModel(nn.Module):
         return optimizer_parameters
 
     def forward(self, batch_inputs):
-        # input_ids: sen_num x bert_len
-        # token_type_ids: sen_num  x bert_len
         input_ids, token_type_ids = batch_inputs
 
-        # sen_num x bert_len x 256, sen_num x 256
         sequence_output, pooled_output = self.bert(
             input_ids=input_ids, token_type_ids=token_type_ids)
-        # print(sequence_output.shape)
-        out = self.dense(sequence_output)
-
-        score = F.softmax(out, dim=-1)  # dim=-1： 对最后一维进行softmax
-        # print("score:{}".format(score.shape))
-        score = score.view(score.shape[0] * score.shape[1], score.shape[2])
-        return score
-        # if self.pooled:
-        #     reps = pooled_output
-        # else:
-        #     reps = sequence_output[:, 0, :]  # sen_num x 256
 
         # if self.training:
-        #     reps = self.dropout(reps)
+        #     sequence_output = self.dropout(sequence_output)
 
-        # logits = tf.layers.dense(embedding, units=num_labels, use_bias=True)
-        # probabilities = tf.nn.softmax(logits, axis=-1)
-        # log_probs = tf.nn.log_softmax(logits, axis=-1)
+        out = self.dense(sequence_output)
+
+        score = out
+        # score = F.softmax(out, dim=-1)  # dim=-1： 对最后一维进行softmax
+        # print("score:{}".format(score.shape))
+        # print(score[0,:,:])
+        score = score.view(score.shape[0] * score.shape[1], score.shape[2])
+        return score
 
         # one_hot_labels = tf.one_hot(labels, depth=num_labels, dtype=tf.float32)
-
-        # per_example_loss = - \
-        #     tf.reduce_sum(one_hot_labels * log_probs, axis=-1)  # loss 交叉熵损失函数
-        # loss = tf.reduce_mean(per_example_loss)
 

@@ -8,11 +8,11 @@ import numpy as np
 from utils import file_utils, model_utils
 from evaluation_index import scores
 import os
-import time
+
 
 config = cfg.config
-dataset_name = "demo"
-# dataset_name = "china_people"
+# dataset_name = "demo"
+dataset_name = "china_people"
 model_name = "bert_nn"
 
 config.define("raw_path", "data/raw_data/%s" % dataset_name, "path to raw dataset")
@@ -47,8 +47,8 @@ config.define("use_pretrained", False, "use pretrained word embedding")
 config.define("tuning_emb", False, "tune pretrained word embedding while training")
 config.define("emb_dim", 300, "embedding dimension for encoder and decoder input words/tokens")
 
-config.define("train_batch_size", 16, "train_batch_size")
-config.define("test_batch_size", 16, "test_batch_size")
+config.define("train_batch_size", 64, "train_batch_size")
+config.define("test_batch_size", 64, "test_batch_size")
 config.define("epochs", 100, "epochs")
 config.define("clip", 5.0, "clip")
 
@@ -77,10 +77,8 @@ def run(mtd="fold_split"):
 
             score, dev_f1 = scores.get_score(y_true, y_pred)
         return score, dev_f1
-
-    if mtd == "fold_split":
-        demo_preprocess.split_dataset(raw_path, train_path, dev_path, test_path)
-    elif mtd == "process_data":
+    step = 0
+    if mtd == "process_data":
         demo_preprocess.process_data(config, train_path, dev_path)
     elif mtd == "train":
         Train_data = file_utils.read_json(config["train_set"])
@@ -91,7 +89,7 @@ def run(mtd="fold_split"):
         del Train_data, Dev_data
         # 一个epoch的batch个数
         batch_num = int(np.ceil(len(train_data) / float(config["train_batch_size"])))
-        print("batch_num:{}".format(batch_num))
+
         model = BertSoftmaxModel(cfg.bert_path, label_encoder)
         optimizer = Optimizer(model.all_parameters, steps=batch_num * config["epochs"])  # 优化器
 
@@ -99,7 +97,7 @@ def run(mtd="fold_split"):
         criterion = nn.CrossEntropyLoss()  # obj
         best_train_f1, best_dev_f1 = 0, 0
         early_stop = -1
-        EarlyStopEpochs = 30  # 当多个epoch，dev的指标都没有提升，则早停
+        EarlyStopEpochs = 3  # 当多个epoch，dev的指标都没有提升，则早停
         # train
         print("start train")
         for epoch in range(1, config["epochs"] + 1):
@@ -110,7 +108,6 @@ def run(mtd="fold_split"):
             # batch_idx = 1
             y_pred = []
             y_true = []
-            step = 0
             for batch_data in dataset_processer.data_iter(train_data, config["train_batch_size"], shuffle=True):
                 torch.cuda.empty_cache()
                 batch_inputs, batch_labels = dataset_processer.batch2tensor(batch_data)
@@ -122,20 +119,23 @@ def run(mtd="fold_split"):
                 losses += loss_value
                 overall_losses += loss_value
 
-                y_pred.extend(torch.max(batch_outputs, dim=1)[1].cpu().numpy().tolist())
+                y_pred.extend(torch.max(batch_outputs, dim=1)
+                              [1].cpu().numpy().tolist())
                 y_true.extend(batch_labels.cpu().numpy().tolist())
 
-                # nn.utils.clip_grad_norm_(optimizer.all_params, max_norm=config["clip"])  # 梯度裁剪
+                nn.utils.clip_grad_norm_(
+                    optimizer.all_params, max_norm=config["clip"])  # 梯度裁剪
                 for cur_optim, scheduler in zip(optimizer.optims, optimizer.schedulers):
                     cur_optim.step()
                     scheduler.step()
                 optimizer.zero_grad()
                 step += 1
-                # print(step, time.time())
+                # print(step)
+            print(epoch)
             overall_losses /= batch_num
             overall_losses = scores.reformat(overall_losses, 4)
             score, train_f1 = scores.get_score(y_true, y_pred)
-            print("epoch:{},train_score:{}, train_f1:{}, overall_loss:{} ".format(epoch, train_f1, score, overall_losses))
+            print("score:{}, train_f1:{}".format(train_f1, score))
             # if set(y_true) == set(y_pred):
             #     print("report")
             #     report = classification_report(y_true, y_pred, digits=4, target_names=label_encoder.target_names)
@@ -157,8 +157,9 @@ def run(mtd="fold_split"):
                 early_stop += 1
                 if early_stop == EarlyStopEpochs:  # 达到早停次数，则停止训练
                     break
-            print("early_stop:{}, score:{}, dev_f1:{}, best_train_f1:{}, best_dev_f1:{}".format(
-                early_stop, dev_f1, score, best_train_f1, best_dev_f1))
+            print("early_stop:{}".format(early_stop))
+            print("score:{}, dev_f1:{}, best_train_f1:{}, best_dev_f1:{}".format(
+                dev_f1, score, best_train_f1, best_dev_f1))
 
 
 if __name__ == "__main__":

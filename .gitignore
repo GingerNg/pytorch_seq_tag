@@ -6,3 +6,4 @@ __pycache__
 data/raw_data/demo/2014_corpus*.txt
 data/raw_data/china_people/*
 data/dataset/china_people/*
+nohup.out

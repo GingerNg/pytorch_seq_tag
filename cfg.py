@@ -3,7 +3,7 @@ import os
 from enum import Enum
 from utils.config import Configer
 
-# 全局变量
+# 全局配置
 
 config = Configer()
 

@@ -3,10 +3,6 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 
 # build optimizer
 learning_rate = 2e-4
-decay = .75
-decay_step = 1000
-
-learning_rate = 2e-4
 bert_lr = 5e-5
 decay = .75
 decay_step = 1000
