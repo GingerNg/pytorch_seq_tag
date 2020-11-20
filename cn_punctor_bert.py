@@ -9,10 +9,12 @@ from utils import file_utils, model_utils
 from evaluation_index import scores
 import os
 import time
+from models import loss_factory
+
 
 config = cfg.config
-dataset_name = "demo"
-# dataset_name = "china_people"
+# dataset_name = "demo"
+dataset_name = "china_people"
 model_name = "bert_nn"
 
 config.define("raw_path", "data/raw_data/%s" % dataset_name, "path to raw dataset")
@@ -60,6 +62,14 @@ train_path = os.path.join(cfg.proj_path, config["raw_path"], "2014_corpus_train.
 dev_path = os.path.join(cfg.proj_path, config["raw_path"], "2014_corpus_dev.txt")
 test_path = os.path.join(cfg.proj_path, config["raw_path"], "2014_corpus_test.txt")
 
+# build the network model
+if not cfg.RESUME_EPOCH:
+    model = BertSoftmaxModel(cfg.bert_path, label_encoder)
+else:
+    save_folder=os.path.join(cfg.proj_path, "data/bert_nn")
+    print(' ******* Resume training from --  epoch {} *********'.format(cfg.RESUME_EPOCH))
+    model = model_utils.load_checkpoint(os.path.join(save_folder, 'epoch_{}.pth'.format(cfg.RESUME_EPOCH)))
+
 def run(mtd="fold_split"):
     def _eval(data):
         model.eval()  # 不启用 BatchNormalization 和 Dropout
@@ -92,17 +102,18 @@ def run(mtd="fold_split"):
         # 一个epoch的batch个数
         batch_num = int(np.ceil(len(train_data) / float(config["train_batch_size"])))
         print("batch_num:{}".format(batch_num))
-        model = BertSoftmaxModel(cfg.bert_path, label_encoder)
+        # model = BertSoftmaxModel(cfg.bert_path, label_encoder)
         optimizer = Optimizer(model.all_parameters, steps=batch_num * config["epochs"])  # 优化器
 
         #　loss
-        criterion = nn.CrossEntropyLoss()  # obj
+        # criterion = nn.CrossEntropyLoss()  # obj
+        criterion = loss_factory.focal_loss()
         best_train_f1, best_dev_f1 = 0, 0
         early_stop = -1
-        EarlyStopEpochs = 30  # 当多个epoch，dev的指标都没有提升，则早停
+        EarlyStopEpochs = 10  # 当多个epoch，dev的指标都没有提升，则早停
         # train
         print("start train")
-        for epoch in range(1, config["epochs"] + 1):
+        for epoch in range(cfg.RESUME_EPOCH+1, config["epochs"] + 1):
             optimizer.zero_grad()
             model.train()  # 启用 BatchNormalization 和 Dropout
             overall_losses = 0

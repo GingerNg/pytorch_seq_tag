@@ -69,7 +69,7 @@ class DatasetProcesser(object):
 
     def batch2tensor(self, batch_data):
         batch_size = len(batch_data)
-        max_sent_len = 100
+        max_sent_len = 200
         doc_labels = []
         for doc_data in batch_data:
             if len(doc_data[0]) >= max_sent_len:

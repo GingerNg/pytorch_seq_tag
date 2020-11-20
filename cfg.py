@@ -10,7 +10,8 @@ config = Configer()
 proj_path = os.path.dirname(__file__)
 
 # bert_path = os.path.join(proj_path, 'data/emb/bert-mini/')
-emb_path = "/home/wujinjie/kesci_question_multilabel_classification"
+emb_path = proj_path
+#emb_path = "/home/wujinjie/kesci_question_multilabel_classification"
 bert_path = os.path.join(emb_path, "data/emb/chinese_L-12_H-768_A-12/")
 # 语料相关配置
 fold_data_path = os.path.join(proj_path, "data/textcnn/data/fold_data.pl")
@@ -25,6 +26,8 @@ baike_vec_path = os.path.join(proj_path, "data/w2v.h5")
 
 stop_word_path = os.path.join(proj_path, "data/stopwords.txt")
 
+# 从第几个epoch开始resume训练，如果为0，从头开始
+RESUME_EPOCH = 2
 
 class STEPTYPE(Enum):
     train = "01"
