@@ -19,6 +19,7 @@ class Optimizer:
                 optim = torch.optim.Adam(parameters, lr=learning_rate)
                 self.optims.append(optim)
 
+                # 学习率decay
                 l = lambda step: decay ** (step // decay_step)
                 scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lr_lambda=l)
                 self.schedulers.append(scheduler)
