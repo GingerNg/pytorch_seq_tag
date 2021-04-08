@@ -216,6 +216,7 @@ for epoch in range(300):  # again, normally you would NOT do 300 epochs, it is t
         targets = torch.tensor([tag_to_ix[t] for t in tags], dtype=torch.long)
 
         # Step 3. Run our forward pass.
+        print(sentence_in.shape, targets.shape)
         loss = model.neg_log_likelihood(sentence_in, targets)
 
         # Step 4. Compute the loss, gradients, and update the parameters by

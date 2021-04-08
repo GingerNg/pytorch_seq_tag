@@ -27,7 +27,7 @@ def _batch_slice(data, batch_size):
 class DatasetProcesser(object):
     def __init__(self, bert_path):
         super().__init__()
-        self.tokenizer = WhitespaceTokenizer(bert_path)
+        self.tokenizer = WhitespaceTokenizer(bert_path, max_len=200)
 
     def get_examples(self, data, label_encoder):
         label2id = label_encoder.label2id
@@ -35,13 +35,8 @@ class DatasetProcesser(object):
         for dat in data:
         # for text, label in zip(data['text'], data['label']):
             # label
-            ids = label2id(dat["tags"])
-            token_ids = self.tokenizer.tokenize(dat["words"])
-            # for sent_len, sent_words in sents_words:
-            #     word_ids = vocab.word2id(sent_words)
-            #     extword_ids = emb_vocab.extword2id(sent_words)
-            #     # sent_len 句子长度：即句子中词个数
-            #     doc.append([sent_len, word_ids, extword_ids])
+            ids = label2id(dat["tags"])                        # 199
+            token_ids = self.tokenizer.tokenize(dat["words"])  # 201
             examples.append([ids, len(token_ids), token_ids])
 
         logging.info('Total %d docs.' % len(examples))
@@ -99,7 +94,7 @@ class DatasetProcesser(object):
             batch_inputs1 = batch_inputs1.to(device)
             batch_inputs2 = batch_inputs2.to(device)
             batch_labels = batch_labels.to(device)
-        # print("batch_labels_shape:{}".format(batch_labels.shape))
+        print("batch_labels_shape:{}, batch_inputs1_shape:{}".format(batch_labels.shape, batch_inputs1.shape))
         return (batch_inputs1, batch_inputs2), batch_labels
 
 

@@ -98,7 +98,7 @@ class DatasetProcesser(object):
             batch_inputs1 = batch_inputs1.to(device)
             batch_inputs2 = batch_inputs2.to(device)
             batch_labels = batch_labels.to(device)
-        # print("batch_labels_shape:{}".format(batch_labels.shape))
+        print("batch_labels_shape:{}, batch_inputs1_shape:{}".format(batch_labels.shape, batch_inputs1.shape))
         return (batch_inputs1, batch_inputs2), batch_labels
 
 

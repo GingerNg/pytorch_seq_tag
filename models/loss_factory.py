@@ -7,6 +7,6 @@ def cross_entropy_loss():
     return criterion
 
 
-def focal_loss():
+def  focal_loss():
     criterion = FocalLoss(4)  # obj
     return criterion
